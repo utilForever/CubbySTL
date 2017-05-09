@@ -32,11 +32,11 @@ protected:
 
     Type* AllocImpl()
     {
-        return *(Type**)Offset(m_blockStart, m_szBlockAligned * (m_szBlocks - ++m_blockIndex));
+        return *(Type**)Offset(m_blockStart, sizeof(void*) * (m_szBlocks - m_blockIndex++));
     }
     void FreeImpl(Type* object)
     {
-        memcpy(Offset(m_blockStart, m_szBlockAligned * (m_szBlocks - m_blockIndex--)), &object, sizeof(void*));
+        memcpy(Offset(m_blockStart, sizeof(void*) * (m_szBlocks - m_blockIndex--)), &object, sizeof(void*));
     }
 
 public:
@@ -93,6 +93,8 @@ public:
         m_blockStart = contextList;
         m_blockIndex = 0;
 
+        PlatformDepency::Memory::Lock(contextList, sizeof(void*) * m_szBlocks);
+
         // Initialize List.
         for (unsigned i = 0; i < szReserve; ++i)
         {
@@ -118,6 +120,7 @@ public:
         HeapInfo* heapNext = new HeapInfo;
 
         void** contextList = (void**)PlatformDepency::Memory::Alloc(sizeof(void*) * m_szBlocks, 0);
+        PlatformDepency::Memory::Lock(contextList, sizeof(void*) * m_szBlocks);
 
         while (heapLast->next != nullptr) heapLast = heapLast->next;
         heapLast->next = heapNext;
