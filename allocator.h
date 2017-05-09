@@ -107,6 +107,7 @@ public:
         for (HeapInfo* heap = m_heapInfo; heap->next != nullptr; heap = heap->next)
         {
             PlatformDepency::Memory::Free(heap->object, 0);
+            delete heap;
         }
     }
 
