@@ -148,17 +148,7 @@ public:
     template<class ...ArgumentsTypes>
     Type* Create(ArgumentsTypes... Arguments)
     {
-        Type* context;
-
-        while(true)
-        {
-            try {
-                context = AllocImpl();
-                break;
-            } catch(...) {
-                continue;
-            }
-        }
+        Type* context = AllocImpl();
 
         new (context) Type(Arguments...);
 
