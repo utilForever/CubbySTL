@@ -5,10 +5,19 @@
 
 #include "base.h"
 #include <stdio.h>
+#include <type_traits>
 #include <exception>
 
 #pragma warning(push)
 #pragma warning(disable:4267)
+
+struct HeapInfo
+{
+    void* object;
+    size_t size;
+
+    HeapInfo* next;
+};
 
 template<class Type, size_t szBlock = sizeof(Type), size_t szAlign = 8>
 class CubbyAllocator
@@ -23,20 +32,45 @@ protected:
     void**   m_blockStart;
     unsigned m_blockIndex;
     
-    struct HeapInfo {
-        void* object;
-        size_t size;
-        
-        HeapInfo* next;
-    } *m_heapInfo;
+    HeapInfo *m_heapInfo;
 
     Type* AllocImpl()
     {
-        return *(Type**)Offset(m_blockStart, sizeof(void*) * (m_szBlocks - m_blockIndex++));
+#if defined( _DEBUG ) || defined( DEBUG )
+        if (m_blockIndex - m_szBlocks == 0)
+        {
+            throw std::bad_alloc();
+        }
+#endif // DEBUG
+
+        return (Type*)m_blockStart[m_szBlocks - ++m_blockIndex];
     }
     void FreeImpl(Type* object)
     {
-        memcpy(Offset(m_blockStart, sizeof(void*) * (m_szBlocks - m_blockIndex--)), &object, sizeof(void*));
+#if defined( _DEBUG ) || defined( DEBUG )
+        auto CheckIsFromAllocater = [this, object]() -> bool
+        {
+            for (HeapInfo* heap = m_heapInfo; heap != nullptr; heap = heap->next)
+            {
+                if (
+                    ((size_t)heap->object <= (size_t)object) &&
+                        ((size_t)Offset(heap->object, heap->size) >= (size_t)object))
+                {
+                    return true;
+                }
+             }
+
+            return false;
+        };
+
+        // check is this object is from this allocater.
+        if (CheckIsFromAllocater() == false)
+        {
+            throw std::bad_alloc();
+        }
+#endif // DEBUG
+
+        m_blockStart[m_szBlocks - m_blockIndex--] = object;
     }
 
 public:
@@ -64,7 +98,7 @@ public:
         fprintf_s(fOut, "=======================================================\n");
 
         unsigned index;
-        for (HeapInfo* heap = m_heapInfo; heap->next != nullptr; heap = heap->next)
+        for (HeapInfo* heap = m_heapInfo; heap != nullptr; heap = heap->next)
         {
             fprintf_s(fOut, " - Heap#%d                                             \n", index);
             fprintf_s(fOut, "     - Heap Object   : 0x%x                            \n", heap->object);
@@ -76,22 +110,22 @@ public:
 
     CubbyAllocator(unsigned szReserve)
     {
-        m_isReserved = true;
-        m_szBlocks = szReserve;
+        m_isReserved        = true;
+        m_szBlocks          = szReserve;
 
-        size_t szAligned  = AlignAs(szBlock, szAlign);
-        void* contextHeap = PlatformDepency::Memory::Alloc((szAligned * szReserve), 0);
+        size_t szAligned    = AlignAs(szBlock, szAlign);
+        void* contextHeap   = PlatformDepency::Memory::Alloc((szAligned * szReserve), 0);
 
-        m_szBlockAligned  = szAligned;
+        m_szBlockAligned    = szAligned;
 
-        m_heapInfo = new HeapInfo;
+        m_heapInfo          = new HeapInfo;
         m_heapInfo->size    = (szAligned * szReserve);
         m_heapInfo->object  = contextHeap;
         m_heapInfo->next    = nullptr;
 
-        void** contextList = (void**)PlatformDepency::Memory::Alloc((sizeof(void*) * szReserve), 0);
-        m_blockStart = contextList;
-        m_blockIndex = 0;
+        void** contextList  = (void**)PlatformDepency::Memory::Alloc((sizeof(void*) * szReserve), 0);
+        m_blockStart        = contextList;
+        m_blockIndex        = 0;
 
         PlatformDepency::Memory::Lock(contextList, sizeof(void*) * m_szBlocks);
 
@@ -106,10 +140,10 @@ public:
     {
         PlatformDepency::Memory::Free(m_blockStart, 0);
         
-        for (HeapInfo* heap = m_heapInfo; heap->next != nullptr; heap = heap->next)
+        // Free all heaps.
+        for (HeapInfo* heap = m_heapInfo; heap != nullptr; heap = heap->next)
         {
             PlatformDepency::Memory::Free(heap->object, 0);
-            delete heap;
         }
     }
 
@@ -120,17 +154,31 @@ public:
         HeapInfo* heapLast = m_heapInfo;
         HeapInfo* heapNext = new HeapInfo;
 
+        // reallocate heap object array.
         void** contextList = (void**)PlatformDepency::Memory::Alloc(sizeof(void*) * m_szBlocks, 0);
         PlatformDepency::Memory::Lock(contextList, sizeof(void*) * m_szBlocks);
 
-        while (heapLast->next != nullptr) heapLast = heapLast->next;
+        // Iterate heapLast to end.
+        while (heapLast->next != nullptr)
+        {
+            heapLast = heapLast->next;
+        }
+
+        // set next heap as heapNext(new heap)
         heapLast->next = heapNext;
 
+        // allocate & initialize heap.
         heapNext->object = PlatformDepency::Memory::Alloc((m_szBlockAligned * Blocks), 0);
         heapNext->size   = Blocks * m_szBlockAligned;
         heapNext->next   = nullptr;
-        
 
+        // lock heap if other heap already locked.
+        if (m_isLocked)
+        {
+            PlatformDepency::Memory::Lock(heapNext->object, heapNext->size);
+        }
+
+        // reinitialize heap object array.
         unsigned i = 0;
         for (; i < Blocks; ++i)
         {
@@ -141,6 +189,7 @@ public:
             contextList[i] = m_blockStart[index++];
         }
 
+        // free old heap object array, and set array as new allocated array.
         PlatformDepency::Memory::Free(m_blockStart, 0);
         m_blockStart = contextList;
     }
@@ -150,12 +199,46 @@ public:
     {
         Type* context = AllocImpl();
 
-        new (context) Type(Arguments...);
+        // ============================= NOTE =====================================
+        //      IT DOESN'T EFFECTS ON PERFORMANCE BECAUSE COMPILER OPTIMIZATION.
+        //      AND ALSO "NEW OPERATOR INITIALIZE" DOES LOT EFFECTS ON PERFORMANCE.
+        // ========================================================================
+        // if Type has default constructor or its pod. don't call constructor.
+        if ((std::is_default_constructible<Type>::value || std::is_pod<Type>::value) == false)
+        {
+            // call constructor
+            new (context) Type(Arguments...);
+        }
+        else
+        {
+            context = { Arguments... };
+        }
 
         return context;
     }
+    
+    // Template specalization for Create function(no constructor arguments)
+    template<> Type* Create<>()
+    {
+        Type* context = AllocImpl();
+
+        // ============================= NOTE =====================================
+        //      IT DOESN'T EFFECTS ON PERFORMANCE BECAUSE COMPILER OPTIMIZATION.
+        //      AND ALSO "NEW OPERATOR INITIALIZE" DOES LOT EFFECTS ON PERFORMANCE.
+        // ========================================================================
+        // if Type has default constructor or its pod. don't call constructor.
+        if ((std::is_default_constructible<Type>::value || std::is_pod<Type>::value) == false)
+        {
+            // call constructor
+            new (context) Type();
+        }
+
+        return context;
+    }
+
     void Distroy(Type* object)
     {
+        // call distructor.
         object->~Type();
 
         FreeImpl(object);
@@ -163,7 +246,9 @@ public:
 
     void Lock()
     {
-        for (HeapInfo* heap = m_heapInfo; heap->next != nullptr; heap = heap->next)
+        m_isLocked = true;
+
+        for (HeapInfo* heap = m_heapInfo; heap != nullptr; heap = heap->next)
         {
             PlatformDepency::Memory::Lock(heap->object, heap->size);
         }
