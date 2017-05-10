@@ -199,20 +199,7 @@ public:
     {
         Type* context = AllocImpl();
 
-        // ============================= NOTE =====================================
-        //      IT DOESN'T EFFECTS ON PERFORMANCE BECAUSE COMPILER OPTIMIZATION.
-        //      AND ALSO "NEW OPERATOR INITIALIZE" DOES LOT EFFECTS ON PERFORMANCE.
-        // ========================================================================
-        // if Type has default constructor or its pod. don't call constructor.
-        if ((std::is_default_constructible<Type>::value || std::is_pod<Type>::value) == false)
-        {
-            // call constructor
-            new (context) Type(Arguments...);
-        }
-        else
-        {
-            context = { Arguments... };
-        }
+        new (context) Type(Arguments...);
 
         return context;
     }
@@ -226,8 +213,8 @@ public:
         //      IT DOESN'T EFFECTS ON PERFORMANCE BECAUSE COMPILER OPTIMIZATION.
         //      AND ALSO "NEW OPERATOR INITIALIZE" DOES LOT EFFECTS ON PERFORMANCE.
         // ========================================================================
-        // if Type has default constructor or its pod. don't call constructor.
-        if ((std::is_default_constructible<Type>::value || std::is_pod<Type>::value) == false)
+        // if Type is pod. don't call constructor.
+        if (std::is_pod<Type>::value == false)
         {
             // call constructor
             new (context) Type();
