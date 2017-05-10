@@ -97,7 +97,7 @@ public:
         fprintf_s(fOut, "     - isLocked    : %s                                \n", isLocked() ? "true" : "false");
         fprintf_s(fOut, "=======================================================\n");
 
-        unsigned index;
+        unsigned index = 0;
         for (HeapInfo* heap = m_heapInfo; heap != nullptr; heap = heap->next)
         {
             fprintf_s(fOut, " - Heap#%d                                             \n", index);
