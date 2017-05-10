@@ -219,14 +219,16 @@ public:
             // call constructor
             new (context) Type();
         }
-
         return context;
     }
 
     void Distroy(Type* object)
     {
-        // call distructor.
-        object->~Type();
+        // call distructor if type is non-pod
+        if( std::is_pod::value == false)
+        {
+            object->~Type();
+        }
 
         FreeImpl(object);
     }
