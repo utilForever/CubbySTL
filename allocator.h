@@ -172,7 +172,7 @@ public:
         heapNext->size   = Blocks * m_szBlockAligned;
         heapNext->next   = nullptr;
 
-        // lock heap if other heap already locked.
+        // lock heap if other heap already set as locked.
         if (m_isLocked)
         {
             PlatformDepency::Memory::Lock(heapNext->object, heapNext->size);
