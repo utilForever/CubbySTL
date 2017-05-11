@@ -11,12 +11,14 @@
 #pragma warning(push)
 #pragma warning(disable:4267)
 
-struct HeapInfo
+struct PageInfo
 {
-    void* object;
-    size_t size;
+    void*       object;
 
-    HeapInfo* next;
+    size_t      sizeTotal;
+    size_t      sizeNow;
+
+    PageInfo* next;
 };
 
 template<class Type, size_t szBlock = sizeof(Type), size_t szAlign = 8>
@@ -32,7 +34,7 @@ protected:
     void**   m_blockStart;
     unsigned m_blockIndex;
     
-    HeapInfo *m_heapInfo;
+    PageInfo *m_heapInfo;
 
     Type* AllocImpl()
     {
@@ -50,11 +52,11 @@ protected:
 #if defined( _DEBUG ) || defined( DEBUG )
         auto CheckIsFromAllocater = [this, object]() -> bool
         {
-            for (HeapInfo* heap = m_heapInfo; heap != nullptr; heap = heap->next)
+            for (PageInfo* heap = m_heapInfo; heap != nullptr; heap = heap->next)
             {
                 if (
                     ((size_t)heap->object <= (size_t)object) &&
-                        ((size_t)Offset(heap->object, heap->size) >= (size_t)object))
+                        ((size_t)Offset(heap->object, heap->sizeNow) >= (size_t)object))
                 {
                     return true;
                 }
@@ -98,11 +100,11 @@ public:
         fprintf_s(fOut, "=======================================================\n");
 
         unsigned index = 0;
-        for (HeapInfo* heap = m_heapInfo; heap != nullptr; heap = heap->next)
+        for (PageInfo* heap = m_heapInfo; heap != nullptr; heap = heap->next)
         {
             fprintf_s(fOut, " - Heap#%d                                             \n", index);
             fprintf_s(fOut, "     - Heap Object   : 0x%x                            \n", heap->object);
-            fprintf_s(fOut, "     - Heap Size     : %d ( 0x%x )                     \n", heap->size, heap->size);
+            fprintf_s(fOut, "     - Heap Size     : %d ( 0x%x )                     \n", heap->sizeNow, heap->sizeNow);
             fprintf_s(fOut, "=======================================================\n");
             index++;
         }
@@ -110,29 +112,27 @@ public:
 
     CubbyAllocator(unsigned szReserve)
     {
-        m_isReserved        = true;
-        m_szBlocks          = szReserve;
+        m_isReserved            = true;
+        m_szBlocks              = szReserve;
 
-        size_t szAligned    = AlignAs(szBlock, szAlign);
-        void* contextHeap   = PlatformDepency::Memory::Alloc((szAligned * szReserve), 0);
+        size_t szAligned        = AlignAs(szBlock, szAlign);
+        void* contextHeap       = PlatformDepency::Memory::Alloc(0);
 
-        m_szBlockAligned    = szAligned;
+        m_szBlockAligned        = szAligned;
 
-        m_heapInfo          = new HeapInfo;
-        m_heapInfo->size    = (szAligned * szReserve);
-        m_heapInfo->object  = contextHeap;
-        m_heapInfo->next    = nullptr;
+        m_heapInfo              = new PageInfo;
+        m_heapInfo->sizeNow     = szAligned * szReserve;
+        m_heapInfo->sizeTotal   = PlatformDepency::Memory::getDefaultPageSize();
+        m_heapInfo->object      = contextHeap;
+        m_heapInfo->next        = nullptr;
 
-        void** contextList  = (void**)PlatformDepency::Memory::Alloc((sizeof(void*) * szReserve), 0);
-        m_blockStart        = contextList;
-        m_blockIndex        = 0;
-
-        PlatformDepency::Memory::Lock(contextList, sizeof(void*) * m_szBlocks);
+        m_blockStart            = new void*[szReserve];
+        m_blockIndex            = 0;
 
         // Initialize List.
         for (unsigned i = 0; i < szReserve; ++i)
         {
-            contextList[i] = Offset(contextHeap, szAligned * i);
+            m_blockStart[i] = Offset(contextHeap, szAligned * i);
         }
     }
 
@@ -141,65 +141,117 @@ public:
         PlatformDepency::Memory::Free(m_blockStart, 0);
         
         // Free all heaps.
-        for (HeapInfo* heap = m_heapInfo; heap != nullptr; heap = heap->next)
+        for (PageInfo* heap = m_heapInfo; heap != nullptr; heap = heap->next)
         {
             PlatformDepency::Memory::Free(heap->object, 0);
         }
     }
 
+    //
+    // NOTE : NEED REFACTORING. LOOKS DIRTY.
     void Reserve(unsigned Blocks)
     {
+        unsigned       szToAllocate = Blocks * m_szBlockAligned;
+        PageInfo*      piHeapLast   = m_heapInfo;
+
         m_szBlocks += Blocks;
 
-        HeapInfo* heapLast = m_heapInfo;
-        HeapInfo* heapNext = new HeapInfo;
-
         // reallocate heap object array.
-        void** contextList = (void**)PlatformDepency::Memory::Alloc(sizeof(void*) * m_szBlocks, 0);
-        PlatformDepency::Memory::Lock(contextList, sizeof(void*) * m_szBlocks);
+        void** contextList = new void*[m_szBlocks];
 
         // Iterate heapLast to end.
-        while (heapLast->next != nullptr)
+        while (piHeapLast->next != nullptr)
         {
-            heapLast = heapLast->next;
+            piHeapLast = piHeapLast->next;
         }
 
-        // set next heap as heapNext(new heap)
-        heapLast->next = heapNext;
-
-        // allocate & initialize heap.
-        heapNext->object = PlatformDepency::Memory::Alloc((m_szBlockAligned * Blocks), 0);
-        heapNext->size   = Blocks * m_szBlockAligned;
-        heapNext->next   = nullptr;
-
-        // lock heap if other heap already set as locked.
-        if (m_isLocked)
+        // if new page doesn't needed.
+        if ((piHeapLast->sizeTotal - piHeapLast->sizeNow) >= szToAllocate)
         {
-            PlatformDepency::Memory::Lock(heapNext->object, heapNext->size);
-        }
+            void* offsetStart = Offset(piHeapLast->object, piHeapLast->sizeNow);
 
-        // reinitialize heap object array.
-        unsigned i = 0;
-        for (; i < Blocks; ++i)
-        {
-            contextList[i] = Offset(heapNext->object, m_szBlockAligned * i);
-        }
-        for (unsigned index = 0; i < m_szBlocks; ++i)
-        {
-            contextList[i] = m_blockStart[index++];
-        }
+            piHeapLast->sizeNow += szToAllocate;
 
+            unsigned i = 0;
+
+            // Add objects on contextList in new allocated heap.
+            for (; i < Blocks; ++i)
+            {
+                contextList[i] = Offset(offsetStart, m_szBlockAligned * i);
+            }
+            for (unsigned index = 0; i < m_szBlocks; ++i)
+            {
+                contextList[i] = m_blockStart[index++];
+            }
+        }
+        else
+        {
+            unsigned i = 0;
+
+            // If old page object can allocatable. (mean has extra heap)
+            if ((piHeapLast->sizeTotal - piHeapLast->sizeNow) > m_szBlockAligned)
+            {
+                void* offsetStart = Offset(piHeapLast->object, piHeapLast->sizeNow);
+
+                // Add objects on contextList in old page object
+                for (; i < (piHeapLast->sizeTotal - piHeapLast->sizeNow) / m_szBlockAligned; ++i)
+                {
+                    contextList[i] = Offset(offsetStart, m_szBlockAligned * i);
+                }
+
+                piHeapLast->sizeNow += m_szBlockAligned * i;
+                szToAllocate        -= m_szBlockAligned * i;
+            }
+
+            // NOTE : NEW PAGE OBJECT SECTION
+
+            PageInfo* heapNext = new PageInfo;
+
+            // set next heap as heapNext(new heap)
+            piHeapLast->next = heapNext;
+
+            // allocate & initialize heap.
+            heapNext->object    = PlatformDepency::Memory::Alloc(0);
+            heapNext->sizeTotal = PlatformDepency::Memory::getDefaultPageSize();
+            heapNext->sizeNow   = szToAllocate;
+            heapNext->next      = nullptr;
+
+            // lock heap if other heap already locked.
+            if (m_isLocked)
+            {
+                PlatformDepency::Memory::Lock(heapNext->object, heapNext->sizeTotal);
+            }
+
+            // Add objects on contextList in new allocated page.
+            for (; i < szToAllocate / m_szBlockAligned; ++i)
+            {
+                contextList[i] = Offset(heapNext->object, m_szBlockAligned * i);
+            }
+            for (unsigned index = 0; i < m_szBlocks; ++i)
+            {
+                contextList[i] = m_blockStart[index++];
+            }
+        }
         // free old heap object array, and set array as new allocated array.
-        PlatformDepency::Memory::Free(m_blockStart, 0);
+        delete m_blockStart;
         m_blockStart = contextList;
     }
 
     template<class ...ArgumentsTypes>
-    Type* Create(ArgumentsTypes... Arguments)
+    Type* Create(ArgumentsTypes&&... Arguments)
     {
         Type* context = AllocImpl();
 
-        new (context) Type(Arguments...);
+        // ============================= NOTE =====================================
+        //      IT DOESN'T EFFECTS ON PERFORMANCE BECAUSE COMPILER OPTIMIZATION.
+        //      AND ALSO "NEW OPERATOR INITIALIZE" DOES LOT EFFECTS ON PERFORMANCE.
+        // ========================================================================
+        // if Type has default constructor or its pod. don't call constructor.
+        if (std::is_pod<Type>::value == false)
+        {
+            // call constructor
+            new (context) Type(std::forward<ArgumentsTypes>(Arguments)...);
+        }
 
         return context;
     }
@@ -213,22 +265,20 @@ public:
         //      IT DOESN'T EFFECTS ON PERFORMANCE BECAUSE COMPILER OPTIMIZATION.
         //      AND ALSO "NEW OPERATOR INITIALIZE" DOES LOT EFFECTS ON PERFORMANCE.
         // ========================================================================
-        // if Type is pod. don't call constructor.
+        // if Type has default constructor or its pod. don't call constructor.
         if (std::is_pod<Type>::value == false)
         {
             // call constructor
             new (context) Type();
         }
+
         return context;
     }
 
     void Distroy(Type* object)
     {
-        // call distructor if type is non-pod
-        if( std::is_pod::value == false)
-        {
-            object->~Type();
-        }
+        // call distructor.
+        object->~Type();
 
         FreeImpl(object);
     }
@@ -237,9 +287,9 @@ public:
     {
         m_isLocked = true;
 
-        for (HeapInfo* heap = m_heapInfo; heap != nullptr; heap = heap->next)
+        for (PageInfo* heap = m_heapInfo; heap != nullptr; heap = heap->next)
         {
-            PlatformDepency::Memory::Lock(heap->object, heap->size);
+            PlatformDepency::Memory::Lock(heap->object, heap->sizeTotal);
         }
     }
 };
