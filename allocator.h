@@ -102,7 +102,7 @@ public:
         {
             fprintf_s(fOut, " - Heap#%d                                             \n", index);
             fprintf_s(fOut, "     - Heap Object   : 0x%x                            \n", heap->object);
-            fprintf_s(fOut, "     - Heap Size     : %d ( 0x%x)                      \n", heap->size, heap->size);
+            fprintf_s(fOut, "     - Heap Size     : %d ( 0x%x )                     \n", heap->size, heap->size);
             fprintf_s(fOut, "=======================================================\n");
             index++;
         }
