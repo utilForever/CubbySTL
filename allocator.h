@@ -39,7 +39,8 @@ protected:
     Type* AllocImpl()
     {
 #if defined( _DEBUG ) || defined( DEBUG )
-        if (m_blockIndex - m_szBlocks == 0)
+        // if block is all full throw bad alloc.
+        if (isFull())
         {
             throw std::bad_alloc();
         }
@@ -52,6 +53,7 @@ protected:
 #if defined( _DEBUG ) || defined( DEBUG )
         auto CheckIsFromAllocater = [this, object]() -> bool
         {
+            // Check is this object from allocater.
             for (PageInfo* heap = m_heapInfo; heap != nullptr; heap = heap->next)
             {
                 if (
@@ -115,13 +117,11 @@ public:
         m_isReserved            = true;
         m_szBlocks              = szReserve;
 
-        size_t szAligned        = AlignAs(szBlock, szAlign);
+        m_szBlockAligned        = AlignAs(szBlock, szAlign);
         void* contextHeap       = PlatformDepency::Memory::Alloc(0);
 
-        m_szBlockAligned        = szAligned;
-
         m_heapInfo              = new PageInfo;
-        m_heapInfo->sizeNow     = szAligned * szReserve;
+        m_heapInfo->sizeNow     = m_szBlockAligned * szReserve;
         m_heapInfo->sizeTotal   = PlatformDepency::Memory::getDefaultPageSize();
         m_heapInfo->object      = contextHeap;
         m_heapInfo->next        = nullptr;
@@ -172,9 +172,8 @@ public:
 
             piHeapLast->sizeNow += szToAllocate;
 
-            unsigned i = 0;
-
             // Add objects on contextList in new allocated heap.
+            unsigned i = 0;
             for (; i < Blocks; ++i)
             {
                 contextList[i] = Offset(offsetStart, m_szBlockAligned * i);
@@ -199,7 +198,9 @@ public:
                     contextList[i] = Offset(offsetStart, m_szBlockAligned * i);
                 }
 
+                // you need to plus piHeapLast->sizeNow because we allocated objects from piHeapLast.
                 piHeapLast->sizeNow += m_szBlockAligned * i;
+                // you need to minus szToAllocate because we already allocated objects from old object.
                 szToAllocate        -= m_szBlockAligned * i;
             }
 
