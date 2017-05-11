@@ -138,7 +138,7 @@ public:
 
     virtual ~CubbyAllocator()
     {
-        PlatformDepency::Memory::Free(m_blockStart, 0);
+        delete m_blockStart;
         
         // Free all heaps.
         for (PageInfo* heap = m_heapInfo; heap != nullptr; heap = heap->next)
