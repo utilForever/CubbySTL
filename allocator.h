@@ -30,8 +30,8 @@ struct PageInfo
     size_t piUsing;
 };
 
-template<class AllocType, size_t szAligned = AlignAs(sizeof(AllocType), 4)>
-class CubbyAllocator
+template<class AllocType, size_t pages = 1, size_t szAligned = AlignAs(sizeof(AllocType), 4)>
+class CubbyPage
 {
 private:
     typedef AllocType*   AllocTypePtr;
@@ -45,6 +45,8 @@ private:
 
     unsigned             m_arrayFrontIndex;
     unsigned             m_arrayBackIndex;
+
+    const unsigned       m_defaultPageSize = pages * getDefaultPageSize();
 
     inline AllocTypePtr AllocateFromArrayObject()
     {
@@ -106,7 +108,7 @@ private:
         PageInfo* piNew = new PageInfo();
 
         // initialize new PageInfo object.
-        piNew->piObject = PlatformDepency::Memory::Alloc(0);
+        piNew->piObject = PageAlloc(0);
         piNew->piUsing  = 0;
         
         // push on page list.
@@ -136,7 +138,7 @@ private:
             // is over one object is allocatable?
             if(CheckLastPageVaild(1))
             {
-                unsigned objAllocable = (PlatformDepency::Memory::getDefaultPageSize() - piLast->piUsing) / szAligned;
+                unsigned objAllocable = (m_defaultPageSize - piLast->piUsing) / szAligned;
 
                 unsigned pageOldUsing = piLast->piUsing; 
                 unsigned pageNewUsing = piLast->piUsing + (szAligned * objAllocable);
@@ -166,7 +168,7 @@ private:
     {
         PageInfo* piLast = m_pageList.back();
 
-        if( PlatformDepency::Memory::getDefaultPageSize() - piLast->piUsing > szObject * szAligned )
+        if( m_defaultPageSize - piLast->piUsing > szObject * szAligned )
         {
             return true;
         }
@@ -179,16 +181,16 @@ private:
     }
 
 public:
-    CubbyAllocator(unsigned szReserve)
+    CubbyPage(unsigned szReserve)
     {
         AllocateNewPage();
         Reserve(szReserve);
     }
-    ~CubbyAllocator()
+    ~CubbyPage()
     {
         for(PageInfo* &info : m_pageList)
         {
-            PlatformDepency::Memory::Free(info->piObject, 0);
+            PageFree(info->piObject, 0);
             delete info;
         }
     }
@@ -232,10 +234,10 @@ public:
     void Reserve(size_t szReserve)
     {
         // NEED REFACTORING.
-        if (szReserve * szAligned > PlatformDepency::Memory::getDefaultPageSize())
+        if (szReserve * szAligned > m_defaultPageSize)
         {
-            unsigned szToReserve = (PlatformDepency::Memory::getDefaultPageSize() / szAligned);
-            while (szReserve * szAligned > PlatformDepency::Memory::getDefaultPageSize())
+            unsigned szToReserve = (m_defaultPageSize / szAligned);
+            while (szReserve * szAligned > m_defaultPageSize)
             {
                 AllocateNewObject(szToReserve);
                 szReserve -= szToReserve;
