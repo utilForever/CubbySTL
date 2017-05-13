@@ -166,7 +166,7 @@ private:
     {
         PageInfo* piLast = m_pageList.back();
 
-        if( PlatformDepency::Memory::getDefaultPageSize() - piLast->piUsing >= szObject * szAligned )
+        if( PlatformDepency::Memory::getDefaultPageSize() - piLast->piUsing > szObject * szAligned )
         {
             return true;
         }
@@ -181,15 +181,8 @@ private:
 public:
     CubbyAllocator(unsigned szReserve)
     {
-        PageInfo* piNew = AllocateNewPage();
-
-        unsigned pageNewUsing   = (szAligned * szReserve);
-        void*    pageEnd        = Offset(piNew->piObject, pageNewUsing);
-
-        ResizeObjectArray(szReserve);
-        AddObjectOnArray(piNew->piObject, pageEnd);
-
-        piNew->piUsing = pageNewUsing;
+        AllocateNewPage();
+        Reserve(szReserve);
     }
     ~CubbyAllocator()
     {
@@ -238,6 +231,17 @@ public:
     }
     void Reserve(size_t szReserve)
     {
+        // NEED REFACTORING.
+        if (szReserve * szAligned > PlatformDepency::Memory::getDefaultPageSize())
+        {
+            unsigned szToReserve = (PlatformDepency::Memory::getDefaultPageSize() / szAligned);
+            while (szReserve * szAligned > PlatformDepency::Memory::getDefaultPageSize())
+            {
+                AllocateNewObject(szToReserve);
+                szReserve -= szToReserve;
+            }
+        }
+
         AllocateNewObject(szReserve);
     }
     void Distroy(AllocTypePtr object)
