@@ -209,7 +209,7 @@ public:
     {
         AllocTypePtr newObject = AllocateFromArrayObject();
 
-        *newObject = object;
+        std::move(newObject, object);
 
         return newObject;
     }
