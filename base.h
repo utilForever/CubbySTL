@@ -6,7 +6,7 @@
 #pragma warning(push)
 #pragma warning(disable:4312)
 
-void* PageAlloc(unsigned flags);
+void* PageAlloc(unsigned pages, unsigned flags);
 void PageFree(void* context, unsigned flags);
 void PageLock(void* context, size_t size);
 size_t getDefaultPageSize();

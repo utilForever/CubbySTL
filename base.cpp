@@ -7,10 +7,10 @@
 #if defined(__linux__)
 #endif
 
-void* PageAlloc(unsigned flags)
+void* PageAlloc(unsigned pages, unsigned flags)
 {
 #   if defined(WIN32) || defined(_WIN32) // IF Windows
-    return VirtualAlloc(nullptr, getDefaultPageSize(), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    return VirtualAlloc(nullptr, getDefaultPageSize() * pages, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 #   endif
 }
 void PageFree(void* context, unsigned flags)
