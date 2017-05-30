@@ -38,7 +38,35 @@ If you are familiar with the C++ STL or have worked with other templated contain
 
 ## Support Algorithms
 
-TBA
+### Execution Policies (Maybe N/A)
+
+- [] sequenced_policy
+- [] parallel_policy
+- [] parallel_unsequenced_policy
+- [] seq
+- [] par
+- [] par_unseq
+- [] is_execution_policy
+
+### Non-modifying Sequence Operations
+
+- [] all_of
+- [] any_of
+- [] none_of
+- [] for_each
+- [] for_each_n
+- [] count
+- [] count_if
+- [] mismatch
+- [] equal
+- [] find
+- [] find_if
+- [] find_if_not
+- [] find_end
+- [] find_first_of
+- [] adjacent_find
+- [] search
+- [] search_n
 
 ## Documentation
 
