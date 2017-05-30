@@ -10,31 +10,31 @@ If you are familiar with the C++ STL or have worked with other templated contain
 
 ### Sequence Containers
 
-[ ] array
-[ ] vector
-[ ] deque
-[ ] forward_list
-[ ] list
+- [ ] array
+- [ ] vector
+- [ ] deque
+- [ ] forward_list
+- [ ] list
 
 ### Associative Containers
 
-[ ] set
-[ ] map
-[ ] multiset
-[ ] multimap
+- [ ] set
+- [ ] map
+- [ ] multiset
+- [ ] multimap
 
 ### Unordered Associative Containers
 
-[ ] unordered_set
-[ ] unordered_map
-[ ] unordered_multiset
-[ ] unordered_multimap
+- [ ] unordered_set
+- [ ] unordered_map
+- [ ] unordered_multiset
+- [ ] unordered_multimap
 
 ### Container Adaptors
 
-[ ] stack
-[ ] queue
-[ ] priority_queue
+- [ ] stack
+- [ ] queue
+- [ ] priority_queue
 
 ## Support Algorithms
 
