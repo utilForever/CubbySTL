@@ -1,5 +1,7 @@
 # CubbySTL
 
+<img src="https://github.com/utilForever/CubbySTL/blob/master/Logo.png" align="center" />
+
 Standard Template Library for Cubby. It is a C++ template library of containers, algorithms, and iterators useful for runtime and tool development across multiple platforms. It is a fairly extensive and robust implementation of such a library and has an emphasis on high performance above all other considerations.
 
 If you are familiar with the C++ STL or have worked with other templated container/algorithm libraries, you probably don't need to read this. If you have no familiarity with C++ templates at all, then you probably will need more than this document to get you up to speed. In this case, you need to understand that templates, when used properly, are powerful vehicles for the ease of creation of optimized C++ code. A description of C++ templates is outside the scope of this documentation, but there is plenty of such documentation on the Internet.
