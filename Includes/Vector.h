@@ -28,6 +28,20 @@ namespace CubbySTL
 		typedef size_t		size_type;
 		typedef ptrdiff_t	difference_type;
 
+	public:
+		// Constructors
+		Vector() noexcept(noexcept(Alloc()));
+		explicit Vector(const Alloc& alloc) noexcept;
+		explicit Vector(size_type count, const value_type& value, const Alloc& alloc = Alloc());
+		explicit Vector(size_type count, const Alloc& alloc = Alloc());
+		template <typename InputIter>
+		explicit Vector(size_type count, const Alloc& alloc = Alloc());
+		Vector(InputIter first, InputIter last, const Alloc& alloc = Alloc());
+		Vector(const Vector& v, const Alloc& alloc);
+		Vector(Vector&& v) noexcept;
+		Vector(Vector&& v, const Alloc& alloc);
+		Vector(std::initializer_list<T> init_list, const Alloc& alloc);
+
 	private:
 		T*		m_begin;
 		T*		m_end;
