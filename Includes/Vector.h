@@ -9,11 +9,12 @@
 #ifndef CUBBYSTL_VECTOR_H
 #define CUBBYSTL_VECTOR_H
 
+#include <memory>
 #include <type_traits>
 
 namespace CubbySTL
 {
-	template <typename T, typename Alloc = Allocator<T>>
+	template <typename T, typename Alloc = std::allocator<T>>
 	class Vector
 	{
 	public:
